@@ -10,15 +10,27 @@ You will need **PLINK2** installed and available in your PATH. Please follow the
 Before you run any models, first get familiar with the dataset. You may find `data.table::fread()` in R helpful for reading `.bim` and `.fam` files.
 
 (i) Read the `.fam` file. How many samples does the dataset contain?
+dataset contain 4000 samples.
 
 ```{r}
+library(data.table)
+
+# Load the family file to see sample information
+fam_a2 <- fread("02_activities/data/gwa.A2.fam")
+
+# Output the total number of samples
+nrow(fam_a2)
 # Your code here...
 ```
 
 (ii) Read the `.bim` file. How many SNPs does the dataset contain?
-
+dataset contain 306102 SNPs.
 ```{r}
-# Your code here...
+# Read the .bim file to count SNPs
+bim_a2 <- data.table::fread("02_activities/data/gwa.A2.bim")
+
+# Output the number of SNPs
+nrow(bim_a2)
 ```
 
 
@@ -29,7 +41,13 @@ Now we will perform QC using PLINK2 for the genotype files in `gwa.A2`.
 (i) Using PLINK2 from the command line (bash), perform basic QC with the following filters: MAF ≥ 0.05, SNP missingness (`--geno`) ≤ 0.01, individual missingness (`--mind`) ≤ 0.10, and HWE p-value ≥ 0.00005, and output the QC’ed dataset as `gwa.qc.A2`.
 
 ```{bash}
-# Your code here...
+plink2 --bfile 02_activities/data/gwa.A2 \
+  --maf 0.05 \
+  --geno 0.01 \
+  --mind 0.10 \
+  --hwe 0.00005 \
+  --make-bed \
+  --out 02_activities/data/gwa.qc.A2
 ```
 
 #### Question 3: Relatedness
@@ -39,19 +57,33 @@ In this question, you will use **PLINK2’s built-in KING-robust kinship** (`--k
 i)  Perform LD pruning on `gwa.qc.A2` using PLINK2 with the following parameters: `--indep-pairwise 500 50 0.05`, and then generate a new dataset containing only the pruned SNPs.
 
 ```{bash}
-# Your code here...
+plink2 --bfile 02_activities/data/gwa.qc.A2 \
+  --indep-pairwise 500 50 0.05 \
+  --out 02_activities/data/gwa.qc.A2
+```
+
+```{bash}
+plink2 --bfile 02_activities/data/gwa.qc.A2 \
+  --extract 02_activities/data/gwa.qc.A2.prune.in \
+  --make-bed \
+  --out 02_activities/data/gwa.qc.A2_pruned
 ```
 
 (ii) Use PLINK2 on the LD-pruned dataset to identify a set of unrelated individuals up to (approximately) 2nd-degree relatives (use a kinship cutoff of 0.0884).
 
 ```{bash}
-# Your code here...
+plink2 --bfile 02_activities/data/gwa.qc.A2_pruned \
+  --king-cutoff 0.0884 \
+  --out 02_activities/data/gwa_king.A2
 ```
 
 (iii) Using the unrelated individual list from part (ii), create a dataset containing only unrelated individuals and name it `gwa.qc_unrelated.A2`.
 
 ```{bash}
-# Your code here...
+plink2 --bfile 02_activities/data/gwa.qc.A2 \
+  --keep 02_activities/data/gwa_king.A2.king.cutoff.in.id \
+  --make-bed \
+  --out 02_activities/data/gwa.qc_unrelated.A2
 ```
 
 #### Question 4: principal component analysis (PCA)
@@ -61,7 +93,10 @@ i)  Perform LD pruning on `gwa.qc.A2` using PLINK2 with the following parameters
     (Hint: Refer to the PCA section in the GWAS Tutorial II. You should use a `*.prune.in` file to select a set of independent SNPs before performing PCA.)
 
 ```{bash}
-# Your code here...
+plink2 --bfile 02_activities/data/gwa.qc_unrelated.A2 \
+  --extract 02_activities/data/gwa.qc.A2.prune.in \
+  --pca 10 \
+  --out 02_activities/data/gwa_unrel_PCA.A2
 ```
 
 #### Question 5: GWAS analyses
@@ -77,19 +112,38 @@ Assume that:
 (i) Using PLINK2, run a linear regression GWAS using `gwa.qc_unrelated.A2` as the input dataset. Adjust for PCs 1–3 as covariates.
 
 ```{bash}
-# Your code here...
+plink2 --bfile 02_activities/data/gwa.qc_unrelated.A2 \
+  --linear \
+  --covar 02_activities/data/gwa_unrel_PCA.A2.eigenvec \
+  --covar-col-nums 3-5 \
+  --out 02_activities/data/gwa.qc_assoc.A2
 ```
 
 (ii) Create a Manhattan plot of the GWAS results.
 
 ```{r}
-# Your code here...
+library(data.table); library(qqman)
+
+# Load, filter for Additive, and rename columns in one go
+assoc <- fread("02_activities/data/gwa.qc_assoc.A2.PHENO1.glm.linear")[TEST == "ADD"]
+setnames(assoc, c("#CHROM", "POS", "ID"), c("CHR", "BP", "SNP"))
+
+# Generate the plot
+png("./02_activities/data/manhattan_plot_A2.png", width = 1000, height = 600)
+manhattan(assoc, main = "Manhattan Plot: Assignment 2", col = c("blue4", "orange3"))
+dev.off()
 ```
 
 (iii) Create a QQ plot of the GWAS p-values.
 
 ```{r}
-# Your code here...
+# QQ Plot
+png("./02_activities/data/qq_plot_A2.png", width = 600, height = 600)
+
+# The qq function only needs the P-value column from your filtered data
+qq(assoc$P, main = "Q-Q Plot: Assignment 2")
+
+dev.off()
 ```
 
 ### Criteria
